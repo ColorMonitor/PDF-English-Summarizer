@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.py[cod]
+db.sqlite3
+tmp/
+output/
+.playwright-cli/
+*.log
+server*.out
+server*.err
+.env
+*.sqlite3

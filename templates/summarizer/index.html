@@ -1,0 +1,140 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script>
+      document.documentElement.dataset.theme = localStorage.getItem("pdf-theme") || "system";
+    </script>
+    <title>PDF Summarizer</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="{% static 'summarizer/styles.css' %}">
+    <script src="{% static 'summarizer/app.js' %}" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand-block">
+          <p class="eyebrow">LongT5 GovReport</p>
+          <h1>PDF Summarizer</h1>
+        </div>
+        <div class="topbar-actions">
+          <button class="theme-button" id="language-toggle" type="button" title="Change page language" aria-label="Change page language">
+            <span id="language-label">မြန်မာ</span>
+          </button>
+          <button class="theme-button" id="theme-toggle" type="button" title="Change color theme" aria-label="Change color theme">
+            <span class="theme-indicator" aria-hidden="true"></span>
+            <span id="theme-label">System</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="app-shell">
+      <section class="workspace primary-workspace" aria-labelledby="upload-heading">
+        <div class="section-heading">
+          <span class="step">1</span>
+          <div>
+            <h2 id="upload-heading" data-i18n="uploadHeading">Upload and inspect</h2>
+            <p data-i18n="uploadHelp">Analyze the document before choosing pages to summarize.</p>
+          </div>
+        </div>
+        <form id="upload-form" class="upload-form">
+          {% csrf_token %}
+          <label class="file-picker" for="pdf-file">
+            <span class="file-picker-action" data-i18n="choosePdf">Choose PDF</span>
+            <span class="file-picker-meta" id="file-name" data-empty-i18n="noDocument">No document selected</span>
+            <input id="pdf-file" type="file" name="pdf_file" accept="application/pdf" required>
+          </label>
+          <button id="analyze-button" type="submit" data-i18n="analyzePdf">Analyze PDF</button>
+        </form>
+        <div id="error" class="message error" role="alert" hidden></div>
+      </section>
+
+      <section id="analysis-section" class="workspace" aria-labelledby="selection-heading" hidden>
+        <div class="section-heading">
+          <span class="step">2</span>
+          <div>
+            <h2 id="selection-heading" data-i18n="choosePages">Choose pages</h2>
+            <p id="document-name"></p>
+          </div>
+        </div>
+
+        <dl class="stats-grid">
+          <div><dt data-i18n="totalPages">Total pages</dt><dd id="page-count">0</dd></div>
+          <div><dt data-i18n="textCharacters">Text characters</dt><dd id="character-count">0</dd></div>
+          <div><dt data-i18n="ocrNeeded">OCR needed</dt><dd id="ocr-count">0</dd></div>
+          <div><dt data-i18n="ocrStatus">OCR status</dt><dd id="ocr-status">-</dd></div>
+        </dl>
+
+        <div id="ocr-warning" class="message warning" hidden></div>
+
+        <div class="range-controls" aria-label="Page range selection">
+          <label class="field">
+            <span data-i18n="fromPage">From page</span>
+            <input id="range-start" type="number" min="1" inputmode="numeric">
+          </label>
+          <label class="field">
+            <span data-i18n="toPage">To page</span>
+            <input id="range-end" type="number" min="1" inputmode="numeric">
+          </label>
+          <button class="secondary-button" id="apply-range" type="button" data-i18n="applyRange">Apply range</button>
+        </div>
+
+        <form id="selection-form" class="selection-form">
+          <label class="field page-field">
+            <span data-i18n="pages">Pages</span>
+            <input id="page-selection" type="text" placeholder="1-5, 8, 12-14" autocomplete="off" required>
+          </label>
+          <div class="preset-group" aria-label="Page selection presets">
+            <button class="secondary-button" id="select-all" type="button" data-i18n="allPages">All pages</button>
+            <button class="secondary-button" id="select-content" type="button" data-i18n="contentOnly">Content only</button>
+            <button class="secondary-button" id="clear-selection" type="button" data-i18n="clearSelection">Clear selection</button>
+          </div>
+          <button id="summarize-button" type="submit" data-i18n="summarizeSelected">Summarize selected pages</button>
+        </form>
+
+        <div class="page-key" aria-label="Page analysis legend">
+          <span><i class="status-dot content"></i> <span data-i18n="content">Content</span></span>
+          <span><i class="status-dot table_of_contents"></i> <span data-i18n="toc">TOC</span></span>
+          <span><i class="status-dot title_or_short"></i> <span data-i18n="short">Short</span></span>
+          <span><i class="status-dot ocr_required"></i> <span data-i18n="ocr">OCR</span></span>
+          <span><i class="status-dot blank"></i> <span data-i18n="blank">Blank</span></span>
+        </div>
+        <div id="page-map" class="page-map" aria-label="Analyzed PDF pages"></div>
+      </section>
+
+      <section id="progress-section" class="workspace" aria-labelledby="progress-heading" hidden>
+        <div class="section-heading progress-heading-row">
+          <span class="step">3</span>
+          <div>
+            <h2 id="progress-heading" data-i18n="summarizing">Summarizing</h2>
+            <p id="progress-stage">Waiting to start</p>
+          </div>
+          <button id="cancel-button" class="secondary-button cancel-button" type="button" data-i18n="cancel">Cancel</button>
+        </div>
+        <div class="progress-meta"><span id="progress-pages">0 of 0 pages</span><strong id="progress-percent">0%</strong></div>
+        <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div id="progress-fill" class="progress-fill"></div>
+        </div>
+      </section>
+
+      <section id="results-section" class="results" aria-labelledby="results-heading" hidden>
+        <div class="results-title">
+          <div><p class="eyebrow" data-i18n="pageByPage">Page-by-page output</p><h2 id="results-heading" data-i18n="summaries">Summaries</h2></div>
+          <p id="result-device"></p>
+        </div>
+        <div id="summary-list" class="summary-list"></div>
+      </section>
+
+      <section id="empty-state" class="empty-state" aria-label="No document loaded">
+        <div>
+          <p class="eyebrow" data-i18n="ready">Ready</p>
+          <h2 data-i18n="startPdf">Start with a PDF</h2>
+          <p data-i18n="startHelp">Select a document to inspect its text, OCR needs, and page structure.</p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

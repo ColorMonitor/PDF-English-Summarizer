@@ -1,0 +1,9 @@
+django>=5.0
+pypdf>=4.0
+pypdfium2>=5.11
+Pillow>=12.0
+safetensors>=0.4
+sentencepiece>=0.2
+torch>=2.2
+transformers>=4.44
+# OCR also requires the system Tesseract executable with English language data.
