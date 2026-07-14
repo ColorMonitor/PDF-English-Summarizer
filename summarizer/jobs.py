@@ -23,15 +23,23 @@ def document_directory():
 
 
 def register_document(uploaded_file, analysis):
+    return register_document_path(uploaded_file, uploaded_file.name, analysis)
+
+
+def register_document_path(source, filename, analysis):
     document_id = uuid.uuid4().hex
     path = document_directory() / f"{document_id}.pdf"
     with path.open("wb") as destination:
-        for chunk in uploaded_file.chunks():
-            destination.write(chunk)
+        if hasattr(source, "chunks"):
+            for chunk in source.chunks():
+                destination.write(chunk)
+        else:
+            with Path(source).open("rb") as source_file:
+                destination.write(source_file.read())
     with _lock:
         _documents[document_id] = {
             "path": str(path),
-            "filename": Path(uploaded_file.name).name,
+            "filename": Path(filename).name,
             "analysis": analysis,
             "created_at": time.time(),
         }

@@ -1,17 +1,20 @@
 import json
 import tempfile
 from pathlib import Path
+from urllib.parse import quote, unquote, urlparse, urlunparse
+from urllib.request import Request, urlopen
 
+from django.conf import settings
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_GET, require_POST
 
-from .jobs import cancel_job, get_document, public_job, register_document, start_job
+from .jobs import cancel_job, get_document, public_job, register_document, register_document_path, start_job
 from .services import analyze_pdf
 
 
 def index(request):
-    return render(request, "summarizer/index.html")
+    return render(request, "summarizer/index.html", {"source_url": request.GET.get("source", "")})
 
 
 @require_POST
@@ -37,6 +40,46 @@ def analyze(request):
     finally:
         if temporary_path:
             Path(temporary_path).unlink(missing_ok=True)
+
+
+@require_POST
+def analyze_source(request):
+    temporary_path = None
+    try:
+        payload = json.loads(request.body or "{}")
+        source_url = validate_source_url(payload.get("source_url", ""))
+        filename = Path(unquote(urlparse(source_url).path)).name or "source.pdf"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temporary:
+            temporary_path = temporary.name
+            request_obj = Request(source_url, headers={
+                "User-Agent": "Mozilla/5.0",
+                "Accept": "application/pdf,*/*",
+                "Connection": "close",
+            })
+            with urlopen(request_obj, timeout=30) as response:
+                content_type = response.headers.get("Content-Type", "")
+                if "pdf" not in content_type.lower() and not filename.lower().endswith(".pdf"):
+                    raise ValueError("Source URL must point to a PDF.")
+                temporary.write(response.read())
+        analysis = analyze_pdf(temporary_path)
+        document_id = register_document_path(temporary_path, filename, analysis)
+        return JsonResponse({"document_id": document_id, "filename": filename, **analysis})
+    except (ValueError, json.JSONDecodeError) as exc:
+        return api_error(str(exc))
+    except Exception as exc:
+        return api_error(f"Could not download source PDF: {exc}")
+    finally:
+        if temporary_path:
+            Path(temporary_path).unlink(missing_ok=True)
+
+
+def validate_source_url(value):
+    source_url = str(value).strip()
+    parsed = urlparse(source_url)
+    allowed_hosts = getattr(settings, "SOURCE_PDF_ALLOWED_HOSTS", set())
+    if parsed.scheme != "https" or parsed.hostname not in allowed_hosts:
+        raise ValueError("Source PDF host is not allowed.")
+    return urlunparse(parsed._replace(path=quote(unquote(parsed.path))))
 
 
 @require_POST

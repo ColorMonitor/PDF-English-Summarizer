@@ -7,6 +7,8 @@ const state = {
   language: localStorage.getItem("pdf-language") || "en",
 };
 const $ = (id) => document.getElementById(id);
+const sourceUrl = JSON.parse($("source-url")?.textContent || '""');
+const apiUrl = (path) => new URL(path, window.location.href).toString();
 
 const i18n = {
   en: {
@@ -145,7 +147,7 @@ $("upload-form").addEventListener("submit", async (event) => {
   body.append("pdf_file", file);
   setBusy($("analyze-button"), true, t("analyzing"));
   try {
-    const response = await fetch("/api/analyze/", { method: "POST", headers: { "X-CSRFToken": csrfToken() }, body });
+    const response = await fetch(apiUrl("api/analyze/"), { method: "POST", headers: { "X-CSRFToken": csrfToken() }, body });
     state.document = await responseJson(response);
     renderAnalysis(state.document);
   } catch (error) {
@@ -278,7 +280,7 @@ $("selection-form").addEventListener("submit", async (event) => {
   if (state.selectedPages.size) $("page-selection").value = compressPages([...state.selectedPages].sort((a, b) => a - b));
   setBusy($("summarize-button"), true, t("starting"));
   try {
-    const response = await fetch("/api/jobs/", {
+    const response = await fetch(apiUrl("api/jobs/"), {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken() },
       body: JSON.stringify({ document_id: state.document.document_id, pages: $("page-selection").value }),
@@ -301,7 +303,7 @@ $("selection-form").addEventListener("submit", async (event) => {
 async function pollJob() {
   clearTimeout(state.pollTimer);
   try {
-    const job = await responseJson(await fetch(`/api/jobs/${state.jobId}/`));
+    const job = await responseJson(await fetch(apiUrl(`api/jobs/${state.jobId}/`)));
     updateProgress(job);
     renderNewResults(job.results);
     if (["completed", "failed", "cancelled"].includes(job.status)) {
@@ -365,7 +367,7 @@ $("cancel-button").addEventListener("click", async () => {
   if (!state.jobId) return;
   $("cancel-button").disabled = true;
   try {
-    await responseJson(await fetch(`/api/jobs/${state.jobId}/cancel/`, { method: "POST", headers: { "X-CSRFToken": csrfToken() } }));
+    await responseJson(await fetch(apiUrl(`api/jobs/${state.jobId}/cancel/`), { method: "POST", headers: { "X-CSRFToken": csrfToken() } }));
   } catch (error) {
     showError(error.message);
   }
@@ -408,3 +410,25 @@ $("language-toggle").addEventListener("click", () => {
 });
 
 applyLanguage();
+
+async function analyzeSourcePdf() {
+  if (!sourceUrl) return;
+  showError("");
+  $("file-name").textContent = sourceUrl.split("/").pop() || "Linked PDF";
+  setBusy($("analyze-button"), true, t("analyzing"));
+  try {
+    const response = await fetch(apiUrl("api/analyze-source/"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken() },
+      body: JSON.stringify({ source_url: sourceUrl }),
+    });
+    state.document = await responseJson(response);
+    renderAnalysis(state.document);
+  } catch (error) {
+    showError(error.message);
+  } finally {
+    setBusy($("analyze-button"), false, "");
+  }
+}
+
+analyzeSourcePdf();

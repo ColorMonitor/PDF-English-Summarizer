@@ -10,6 +10,7 @@
     <title>PDF Summarizer</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="{% static 'summarizer/styles.css' %}">
+    {{ source_url|json_script:"source-url" }}
     <script src="{% static 'summarizer/app.js' %}" defer></script>
   </head>
   <body>

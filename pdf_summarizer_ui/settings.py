@@ -59,6 +59,9 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 512 * 1024 * 1024
 FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
 
 MODEL_DIR = Path(os.environ.get("MODEL_DIR", r"E:\KLS_ai\model"))
+SOURCE_PDF_ALLOWED_HOSTS = {
+    host.strip() for host in os.environ.get("SOURCE_PDF_ALLOWED_HOSTS", "www.unionsupremecourt.gov.mm").split(",") if host.strip()
+}
 MAX_PAGE_INPUT_TOKENS = 2048
 MAX_SUMMARY_TOKENS = 256
 MIN_SUMMARIZABLE_CHARS = 180
