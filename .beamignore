@@ -1,0 +1,11 @@
+.git/
+.venv/
+.playwright-cli/
+__pycache__/
+*.py[cod]
+*.log
+*.sqlite3
+db.sqlite3
+output/
+tmp/
+uscai_integration/
