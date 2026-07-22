@@ -7,7 +7,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from apps.core.templatetags.usc_tags import first_file, upload_url
 
-from .models import Project
+from .models import Project, ProjectPageSummary
 from .summarizer import (
     cancel_job,
     extract_pages,
@@ -36,6 +36,37 @@ def api_error(message, status=400):
     return JsonResponse({"error": str(message)}, status=status)
 
 
+STORED_PAGE_TYPES = {
+    "toc": "table_of_contents",
+    "cover": "title_or_short",
+    "foreword": "title_or_short",
+    "blank": "title_or_short",
+    "annex": "content",
+}
+
+
+def stored_pages(project, filename):
+    records = list(ProjectPageSummary.objects.filter(
+        project=project,
+        language="en",
+        source_filename=Path(filename).name,
+    ).order_by("pdf_page"))
+    if not records:
+        return None
+    page_numbers = [record.pdf_page for record in records]
+    if page_numbers != list(range(1, len(records) + 1)):
+        raise RuntimeError("Stored page summaries are incomplete.")
+    return [{
+        "page_number": record.pdf_page,
+        "raw_text": "",
+        "text": "",
+        "char_count": record.source_char_count,
+        "page_type": STORED_PAGE_TYPES.get(record.page_type, record.page_type),
+        "stored_page_type": record.page_type,
+        "precomputed_summary": record.summary,
+    } for record in records]
+
+
 def project_summarize(request, pk):
     project = get_object_or_404(Project, pk=pk)
     try:
@@ -53,9 +84,13 @@ def analyze_project(request, pk):
     project = get_object_or_404(Project, pk=pk)
     try:
         filename, source_url = project_source(project)
-        pages = extract_pages(source_url)
+        pages = stored_pages(project, filename)
+        device = "Stored summaries"
+        if pages is None:
+            pages = extract_pages(source_url)
+            device = "Beam GPU"
         document_id, analysis = register_document(
-            session_owner(request), project.pk, filename, pages
+            session_owner(request), project.pk, filename, pages, device=device
         )
         return JsonResponse({
             "document_id": document_id,

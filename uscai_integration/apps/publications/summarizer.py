@@ -171,19 +171,19 @@ def public_analysis(pages):
             "page_number": page["page_number"],
             "page_type": page_type,
             "page_type_label": page_type.replace("_", " ").title(),
-            "char_count": len(page["text"]),
+            "char_count": page.get("char_count", len(page["text"])),
             "selectable": True,
         })
     return {
         "page_count": len(pages),
-        "extracted_characters": sum(len(page["text"]) for page in pages),
+        "extracted_characters": sum(page.get("char_count", len(page["text"])) for page in pages),
         "ocr_page_count": sum(page["page_type"] == "ocr_required" for page in pages),
         "ocr_available": False,
         "pages": public_pages,
     }
 
 
-def register_document(owner, project_id, filename, pages):
+def register_document(owner, project_id, filename, pages, device="Beam GPU"):
     document_id = uuid.uuid4().hex
     analysis = public_analysis(pages)
     with _lock:
@@ -193,6 +193,7 @@ def register_document(owner, project_id, filename, pages):
             "filename": Path(filename).name,
             "pages": pages,
             "analysis": analysis,
+            "device": device,
             "created_at": time.time(),
         }
     return document_id, analysis
@@ -265,7 +266,7 @@ def start_job(document_id, owner, page_numbers):
         "completed": 0,
         "total": len(page_numbers),
         "percent": 0,
-        "device": "Beam GPU",
+        "device": document.get("device", "Beam GPU"),
         "results": [],
         "error": "",
         "cancel_requested": False,
@@ -277,6 +278,17 @@ def start_job(document_id, owner, page_numbers):
 
 
 def result_for_page(page):
+    if "precomputed_summary" in page:
+        return {
+            "page_number": page["page_number"],
+            "page_type": page["page_type"],
+            "page_type_label": page.get("stored_page_type", page["page_type"]).replace("_", " ").title(),
+            "char_count": page.get("char_count", 0),
+            "token_count": 0,
+            "truncated": False,
+            "summary": page["precomputed_summary"],
+            "warning": "",
+        }
     if page["page_type"] == "content":
         result = beam_summary(page)
         return {

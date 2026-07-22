@@ -22,6 +22,38 @@ DETAIL_BUTTON = '''
                     </a>
 '''
 
+MODEL_CLASS = '''
+
+
+class ProjectPageSummary(TimeStampedModel):
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name="page_summaries",
+    )
+    language = models.CharField(max_length=8, default="en")
+    pdf_page = models.PositiveIntegerField()
+    printed_page = models.IntegerField(null=True, blank=True)
+    page_type = models.CharField(max_length=32, blank=True)
+    chapter = models.CharField(max_length=255, blank=True)
+    section_title = models.CharField(max_length=255, blank=True)
+    summary = models.TextField()
+    source_filename = models.CharField(max_length=500)
+    source_pdf_sha256 = models.CharField(max_length=64)
+    source_text_sha256 = models.CharField(max_length=64)
+    source_char_count = models.PositiveIntegerField(default=0)
+    extraction_method = models.CharField(max_length=32, blank=True)
+    review_status = models.CharField(max_length=32, default="source_checked")
+    summary_version = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        ordering = ("pdf_page",)
+        unique_together = (("project", "language", "pdf_page"),)
+
+    def __str__(self):
+        return f"{self.project_id}: {self.language} page {self.pdf_page}"
+'''
+
 
 def atomic_write(path, text):
     temporary = path.with_suffix(path.suffix + ".tmp")
@@ -57,6 +89,12 @@ def patch_requirements(path):
         atomic_write(path, text.rstrip() + "\npypdf==4.3.1\n")
 
 
+def patch_models(path):
+    text = path.read_text(encoding="utf-8")
+    if "class ProjectPageSummary(" not in text:
+        atomic_write(path, text.rstrip() + MODEL_CLASS + "\n")
+
+
 def main():
     root = Path(sys.argv[1] if len(sys.argv) > 1 else "/www/wwwroot/uscai").resolve()
     if not (root / "manage.py").is_file():
@@ -64,6 +102,7 @@ def main():
     patch_urls(root / "apps/publications/urls.py")
     patch_detail(root / "templates/content/detail.html")
     patch_requirements(root / "requirements.txt")
+    patch_models(root / "apps/publications/models.py")
     print("Existing USC files patched.")
 
 

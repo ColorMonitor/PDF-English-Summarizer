@@ -32,17 +32,26 @@ class PatcherTests(unittest.TestCase):
             detail.write_text(patch_existing.DETAIL_ANCHOR, encoding="utf-8")
             requirements = root / "requirements.txt"
             requirements.write_text("Django==4.1\n", encoding="utf-8")
+            models = root / "apps/publications/models.py"
+            models.write_text(
+                "from django.db import models\nfrom apps.core.models import TimeStampedModel\n\n"
+                "class Project(TimeStampedModel):\n    pass\n",
+                encoding="utf-8",
+            )
 
             patch_existing.patch_urls(urls)
             patch_existing.patch_detail(detail)
             patch_existing.patch_requirements(requirements)
+            patch_existing.patch_models(models)
             patch_existing.patch_urls(urls)
             patch_existing.patch_detail(detail)
             patch_existing.patch_requirements(requirements)
+            patch_existing.patch_models(models)
 
             self.assertEqual(urls.read_text(encoding="utf-8").count('name="project_summarize"'), 1)
             self.assertEqual(detail.read_text(encoding="utf-8").count("project_summarize"), 1)
             self.assertEqual(requirements.read_text(encoding="utf-8").count("pypdf==4.3.1"), 1)
+            self.assertEqual(models.read_text(encoding="utf-8").count("class ProjectPageSummary("), 1)
 
 
 class SummarizerTests(unittest.TestCase):
@@ -61,6 +70,18 @@ class SummarizerTests(unittest.TestCase):
 
     def test_table_of_contents_detection(self):
         self.assertTrue(summarizer.is_table_of_contents("Table of Contents\nChapter One 1\nChapter Two 4"))
+
+    def test_precomputed_summary_bypasses_beam(self):
+        result = summarizer.result_for_page({
+            "page_number": 7,
+            "page_type": "content",
+            "stored_page_type": "annex",
+            "char_count": 123,
+            "precomputed_summary": "Stored legal summary.",
+            "text": "",
+        })
+        self.assertEqual(result["summary"], "Stored legal summary.")
+        self.assertEqual(result["page_type_label"], "Annex")
 
 
 if __name__ == "__main__":
